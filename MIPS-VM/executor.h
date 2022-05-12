@@ -19,6 +19,9 @@ public:
 	bool can_run() { return m_can_run; }
 private:
 
+	bool dispatch(instruction inst);
+	bool dispatch_funct(instruction inst);
+
 	section* get_section_for_address(uint32_t addr);
 	
 	registers m_regs;

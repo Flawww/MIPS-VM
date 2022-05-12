@@ -75,10 +75,254 @@ void executor::run() {
         instruction inst = instruction(*reinterpret_cast<uint32_t*>(section->sect.data() + offset));
 
         // dispatch instruction now
-        // ..
+        bool ok = dispatch(inst);
 
         if (increment_pc) {
             m_regs.pc += 0x4; // next instruction
         }  
     }
+}
+
+bool executor::dispatch(instruction inst) {
+    // get the opcode (opcode is always the first 6 bits, so what format we get the opcode as does not matter)
+    switch (inst.r.opcode) {
+    case uint32_t(instructions::R_FORMAT):
+    {
+        return dispatch_funct(inst);
+    }
+    break;
+    case uint32_t(instructions::MFC0):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::J):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::JAL):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::SLTI):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::SLTIU):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::ANDI):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::ORI):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::LUI):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::SW):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::BEQ):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::BNE):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::BLEZ):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::BGTZ):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::ADDI):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::ADDIU):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::LB):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::LW):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::LBU):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::LHU):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::SB):
+    {
+
+    }
+    break;
+    case uint32_t(instructions::SH):
+    {
+
+    }
+    break;
+    default:
+        return false; // invalid opcode
+    }
+
+    return true;
+}
+
+bool executor::dispatch_funct(instruction inst) {
+    switch (inst.r.funct) {
+    case uint32_t(funct::SLL):
+    {
+
+    }
+    break;
+    case uint32_t(funct::DIV):
+    {
+
+    }
+    break;
+    case uint32_t(funct::DIVU):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SRL):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SLT):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SLTU):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SRA):
+    {
+
+    }
+    break;
+    case uint32_t(funct::JR):
+    {
+
+    }
+    break;
+    case uint32_t(funct::JALR):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MFHI):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MTHI):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MFLO):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MTLO):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MULT):
+    {
+
+    }
+    break;
+    case uint32_t(funct::MULTU):
+    {
+
+    }
+    break;
+    case uint32_t(funct::ADD):
+    {
+
+    }
+    break;
+    case uint32_t(funct::ADDU):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SUB):
+    {
+
+    }
+    break;
+    case uint32_t(funct::SUBU):
+    {
+
+    }
+    break;
+    case uint32_t(funct::AND):
+    {
+
+    }
+    break;
+    case uint32_t(funct::OR):
+    {
+
+    }
+    break;
+    case uint32_t(funct::XOR):
+    {
+
+    }
+    break;
+    case uint32_t(funct::NOR):
+    {
+
+    }
+    break;
+    default:
+        return false;
+    }
+
+    return true;
 }
