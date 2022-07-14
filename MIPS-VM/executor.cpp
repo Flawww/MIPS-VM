@@ -11,6 +11,7 @@ executor::executor(std::string file) {
     }
 
     m_text.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(text), {});
+    m_text.address = 0x00400000;
     // ensure divisible by 4, MIPS instruction set is always 4 bytes
     if ((m_text.sect.size() % 4) != 0) {
         printf("Size of bytecode not evenly divisible by 4, invalid.\n");
@@ -21,15 +22,33 @@ executor::executor(std::string file) {
     std::ifstream ktext(file + ".ktext", std::ios::binary);
     if (ktext.is_open()) {
         m_ktext.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(ktext), {});
+        m_ktext.address = 0x80000000;
     }
 
     // load data section if one exists
     std::ifstream data(file + ".data", std::ios::binary);
     if (data.is_open()) {
         m_data.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(data), {});
+        m_data.address = 0x10010000;
+    }
+    
+    m_regs.regs[int(register_names::sp)] = 0x7FFFEFFC;
+    m_regs.pc = m_text.address;
+    m_can_run = true;
+}
+
+int32_t executor::get_offset_for_section(uint32_t addr) {
+    if (addr >= m_data.address && addr < m_data.address + m_data.sect.size()) {
+        return addr - m_data.address;
+    }
+    else if (addr >= m_text.address && addr < m_text.address + m_text.sect.size()) {
+        return addr - m_text.address;
+    }
+    else if (addr >= m_ktext.address && addr < m_ktext.address + m_ktext.sect.size()) {
+        return addr - m_ktext.address;
     }
 
-    m_can_run = true;
+    return -1;
 }
 
 section* executor::get_section_for_address(uint32_t addr) {
@@ -58,6 +77,7 @@ void executor::run() {
         printf("%c", m_data.sect[i]);
     }
     printf("\n");
+    printf("Test print: %s\n", m_data.sect.data());
 
     printf("pc: %08X\n", m_regs.pc);
 
@@ -75,8 +95,11 @@ void executor::run() {
         instruction inst = instruction(*reinterpret_cast<uint32_t*>(section->sect.data() + offset));
 
         // dispatch instruction now
-        bool ok = dispatch(inst);
-
+        if (!dispatch(inst)) {
+            // error state - what do?
+            printf("error state on %08x (opcode: %02x, funct: %02x)\n", inst.hex, inst.r.opcode, inst.r.funct);
+        } 
+        printf("%02X ", inst.i.opcode);
         if (increment_pc) {
             m_regs.pc += 0x4; // next instruction
         }  
@@ -205,6 +228,11 @@ bool executor::dispatch(instruction inst) {
 
 bool executor::dispatch_funct(instruction inst) {
     switch (inst.r.funct) {
+    case uint32_t(funct::SYSCALL):
+    {
+        return dispatch_syscall(inst);
+    }
+    break;
     case uint32_t(funct::SLL):
     {
 
@@ -324,5 +352,9 @@ bool executor::dispatch_funct(instruction inst) {
         return false;
     }
 
+    return true;
+}
+
+bool executor::dispatch_syscall(instruction inst) {
     return true;
 }

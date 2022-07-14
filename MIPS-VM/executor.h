@@ -2,13 +2,8 @@
 #include "pch.h"
 #include "registers.h"
 #include "instruction.h"
+#include "memory.h"
 
-struct section {
-	section() : address(0) {}
-
-	uint32_t address;
-	std::vector<uint8_t> sect;
-};
 
 class executor {
 public:
@@ -21,7 +16,9 @@ private:
 
 	bool dispatch(instruction inst);
 	bool dispatch_funct(instruction inst);
+	bool dispatch_syscall(instruction inst);
 
+	int32_t get_offset_for_section(uint32_t addr);
 	section* get_section_for_address(uint32_t addr);
 	
 	registers m_regs;
@@ -29,6 +26,9 @@ private:
 	section m_data;
 	section m_text;
 	section m_ktext;
+
+	heap m_heap;
+	stack m_stack;
 
 	bool m_can_run;
 };

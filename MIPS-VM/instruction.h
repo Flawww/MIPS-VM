@@ -64,6 +64,7 @@ enum class instructions : int {
 };
 
 enum class funct : int {
+	SYSCALL = 0x0C,
 	SLL = 0x00,
 	DIV = 0x1A,
 	DIVU = 0x1B,
@@ -87,4 +88,19 @@ enum class funct : int {
 	OR = 0x25,
 	XOR = 0x26,
 	NOR = 0x27,
+};
+
+enum class syscalls : int {
+	PRINT_INT = 1,
+	PRINT_FLOAT = 2,
+	PRINT_DBL = 3,
+	PRINT_STRING = 4,
+	READ_INT = 5,
+	READ_FLOAT = 6,
+	READ_DBL = 7,
+	READ_STRING = 8,
+	SBRK = 9,
+	EXIT = 10,
+	PRINT_CHAR = 11,
+	READ_CHAR = 12,
 };

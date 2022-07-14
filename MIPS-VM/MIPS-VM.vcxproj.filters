@@ -24,19 +24,16 @@
     <ClCompile Include="pch.cpp">
       <Filter>pch</Filter>
     </ClCompile>
-    <ClCompile Include="dispatcher.cpp">
+    <ClCompile Include="executor.cpp">
       <Filter>vm</Filter>
     </ClCompile>
-    <ClCompile Include="executor.cpp">
+    <ClCompile Include="memory.cpp">
       <Filter>vm</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
       <Filter>pch</Filter>
-    </ClInclude>
-    <ClInclude Include="dispatcher.h">
-      <Filter>vm</Filter>
     </ClInclude>
     <ClInclude Include="executor.h">
       <Filter>vm</Filter>
@@ -45,6 +42,9 @@
       <Filter>vm</Filter>
     </ClInclude>
     <ClInclude Include="instruction.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="memory.h">
       <Filter>vm</Filter>
     </ClInclude>
   </ItemGroup>
