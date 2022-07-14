@@ -16,11 +16,12 @@ private:
 
 	bool dispatch(instruction inst);
 	bool dispatch_funct(instruction inst);
-	bool dispatch_syscall(instruction inst);
+	bool dispatch_syscall();
 
-	int32_t get_offset_for_section(uint32_t addr);
+	uint32_t get_offset_for_section(section* sect, uint32_t addr);
 	section* get_section_for_address(uint32_t addr);
-	
+	bool is_safe_access(section* sect, uint32_t addr, uint32_t size);
+
 	registers m_regs;
 
 	section m_data;

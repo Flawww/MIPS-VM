@@ -24,7 +24,7 @@ section* stack::get_section_if_valid_stack(uint32_t addr) {
 
 bool stack::is_safe_access(uint32_t addr, uint32_t size) {
 	if (addr < STACK_BOTTOM || addr >= STACK_TOP ||
-		addr + size < STACK_BOTTOM || addr + size >= STACK_TOP) {
+		addr + size < STACK_BOTTOM || addr + size > STACK_TOP) {
 		return false;
 	}
 
@@ -70,7 +70,7 @@ section* heap::get_section_if_valid_heap(uint32_t addr) {
 
 bool heap::is_safe_access(uint32_t addr, uint32_t size) {
 	if (addr < SBRK_HEAP_START || addr >= SBRK_HEAP_END ||
-		addr + size < SBRK_HEAP_START || addr + size >= SBRK_HEAP_END) {
+		addr + size < SBRK_HEAP_START || addr + size > SBRK_HEAP_END) {
 		return false;
 	}
 
