@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "executor.h"
+#include "helper.h"
 
 executor::executor(std::string file) {
     m_can_run = false;
@@ -102,10 +103,16 @@ void executor::run() {
         instruction inst = instruction(*reinterpret_cast<uint32_t*>(section->sect.data() + offset));
 
         // dispatch instruction now
-        if (!dispatch(inst)) {
-            // error state - what do?
-            printf("error state on %08x (opcode: %02x, funct: %02x)\n", inst.hex, inst.r.opcode, inst.r.funct);
-        } 
+        try {
+            if (!dispatch(inst)) {
+                increment_pc = false;
+            }
+        }
+        catch (const std::runtime_error& e) {
+            printf("Error: %s", e.what());
+            break;
+        }
+
         printf("%02X ", inst.i.opcode);
         if (increment_pc) {
             m_regs.pc += 0x4; // next instruction
@@ -123,111 +130,253 @@ bool executor::dispatch(instruction inst) {
     break;
     case uint32_t(instructions::MFC0):
     {
+        // rs - which operation to do from c0 (move to or from)
+        // rt - register index
+        // rd - coproc0 index
 
+        uint32_t* c0_reg = nullptr;
+        switch (inst.r.rd) {
+        case 8:
+            c0_reg = &m_regs.vaddr;
+            break;
+        case 12:
+            c0_reg = &m_regs.status;
+            break;
+        case 13:
+            c0_reg = &m_regs.cause;
+            break;
+        case 14:
+            c0_reg = &m_regs.epc;
+            break;
+        default:
+            throw std::runtime_error("Invalid coproc0 register index for MC0 instruction");
+        }
+
+        switch (inst.r.rs) {
+        case 0:
+            m_regs.regs[inst.r.rt] = *c0_reg;
+            break;
+        case 4:
+            *c0_reg = m_regs.regs[inst.r.rt];
+            break;
+        default:
+            throw std::runtime_error("Invalid MC0 operation");
+        }
+        
+    }
+    break;
+    case uint32_t(instructions::MFC1):
+    {
+        switch (inst.r.rs) {
+        case 0:
+            m_regs.regs[inst.r.rt] = m_regs.f[inst.r.rd];
+            break;
+        case 4:
+            m_regs.f[inst.r.rd] = m_regs.regs[inst.r.rt];
+            break;
+        default:
+            throw std::runtime_error("Invalid MC1 operation");
+        }
+        
     }
     break;
     case uint32_t(instructions::J):
     {
+        uint32_t addr = inst.j.p_addr * 4;
+        addr |= (m_regs.pc + 4) & 0xF0000000;
+        m_regs.pc = addr;
 
+        return false; // dont advance pc
     }
     break;
     case uint32_t(instructions::JAL):
     {
+        m_regs.regs[int(register_names::ra)] = m_regs.pc + 0x4;
 
+        uint32_t addr = inst.j.p_addr * 4;
+        addr |= (m_regs.pc + 4) & 0xF0000000;
+        m_regs.pc = addr;
+
+        return false; // dont advance pc
     }
     break;
     case uint32_t(instructions::SLTI):
     {
-
+        m_regs.regs[inst.i.rt] = (int32_t(m_regs.regs[inst.i.rs]) < bit_cast<int16_t>(inst.i.imm));
     }
     break;
     case uint32_t(instructions::SLTIU):
     {
-
+        m_regs.regs[inst.i.rt] = (m_regs.regs[inst.i.rs] < inst.i.imm);
     }
     break;
     case uint32_t(instructions::ANDI):
     {
-
+        m_regs.regs[inst.i.rt] = m_regs.regs[inst.i.rs] & inst.i.imm;
     }
     break;
     case uint32_t(instructions::ORI):
     {
-
+        m_regs.regs[inst.i.rt] = m_regs.regs[inst.i.rs] | inst.i.imm;
     }
     break;
     case uint32_t(instructions::LUI):
     {
-
-    }
-    break;
-    case uint32_t(instructions::SW):
-    {
-
+        m_regs.regs[inst.i.rt] = inst.i.imm << 16;
     }
     break;
     case uint32_t(instructions::BEQ):
     {
+        if (m_regs.regs[inst.i.rs] == m_regs.regs[inst.i.rt]) {
+            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
 
+            return false; // dont advance pc
+        }
     }
     break;
     case uint32_t(instructions::BNE):
     {
+        if (m_regs.regs[inst.i.rs] != m_regs.regs[inst.i.rt]) {
+            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
 
+            return false; // dont advance pc
+        }
     }
     break;
     case uint32_t(instructions::BLEZ):
     {
+        if (m_regs.regs[inst.i.rs] <= 0) {
+            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
 
+            return false; // dont advance pc
+        }
     }
     break;
     case uint32_t(instructions::BGTZ):
     {
+        if (m_regs.regs[inst.i.rs] > 0) {
+            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
 
+            return false; // dont advance pc
+        }
     }
     break;
     case uint32_t(instructions::ADDI):
     {
-
+        m_regs.regs[inst.i.rt] = int32_t(m_regs.regs[inst.i.rs]) + bit_cast<int16_t>(inst.i.imm);
     }
     break;
     case uint32_t(instructions::ADDIU):
     {
-
-    }
-    break;
-    case uint32_t(instructions::LB):
-    {
-
+        m_regs.regs[inst.i.rt] = m_regs.regs[inst.i.rs] + inst.i.imm;
     }
     break;
     case uint32_t(instructions::LW):
     {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
+            throw std::runtime_error("Invalid memory access for LW operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        m_regs.regs[inst.i.rt] = *reinterpret_cast<int32_t*>(sect->sect.data() + offset);
+    }
+    break;
+    case uint32_t(instructions::LB):
+    {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
+
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(int8_t))) {
+            throw std::runtime_error("Invalid memory access for LB operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        m_regs.regs[inst.i.rt] = *reinterpret_cast<int8_t*>(sect->sect.data() + offset); // sign extend
+    }
+    break;
+    case uint32_t(instructions::LH):
+    {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
+
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(int16_t))) {
+            throw std::runtime_error("Invalid memory access for LH operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        m_regs.regs[inst.i.rt] = *reinterpret_cast<int16_t*>(sect->sect.data() + offset); // sign extend
     }
     break;
     case uint32_t(instructions::LBU):
     {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
+            throw std::runtime_error("Invalid memory access for LBU operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        m_regs.regs[inst.i.rt] = *reinterpret_cast<uint8_t*>(sect->sect.data() + offset); // zero extend
     }
     break;
     case uint32_t(instructions::LHU):
     {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
+            throw std::runtime_error("Invalid memory access for LHU operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        m_regs.regs[inst.i.rt] = *reinterpret_cast<uint16_t*>(sect->sect.data() + offset);  // zero extend
+    }
+    break;
+    case uint32_t(instructions::SW):
+    {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
+
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
+            throw std::runtime_error("Invalid memory access for SW operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        *reinterpret_cast<uint32_t*>(sect->sect.data() + offset) = m_regs.regs[inst.i.rt];
     }
     break;
     case uint32_t(instructions::SB):
     {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
+            throw std::runtime_error("Invalid memory access for SB operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        *reinterpret_cast<uint8_t*>(sect->sect.data() + offset) = m_regs.regs[inst.i.rt];
     }
     break;
     case uint32_t(instructions::SH):
     {
+        uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
+            throw std::runtime_error("Invalid memory access for SB operation");
+        }
+
+        uint32_t offset = get_offset_for_section(sect, addr);
+        *reinterpret_cast<uint16_t*>(sect->sect.data() + offset) = m_regs.regs[inst.i.rt];
     }
     break;
     default:
-        return false; // invalid opcode
+        throw std::runtime_error("Invalid instruction opcode");
     }
 
     return true;

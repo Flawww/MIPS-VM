@@ -47,5 +47,8 @@
     <ClInclude Include="memory.h">
       <Filter>vm</Filter>
     </ClInclude>
+    <ClInclude Include="helper.h">
+      <Filter>vm</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

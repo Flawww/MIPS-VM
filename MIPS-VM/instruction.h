@@ -37,6 +37,7 @@ enum class instructions : int {
 	// R FORMAT
 	R_FORMAT = 0x00, // uses funct
 	MFC0 = 0x10,
+	MFC1 = 0x11,
 
 	// J FORMAT
 	J = 0x02,
@@ -56,6 +57,7 @@ enum class instructions : int {
 	ADDI = 0x08,
 	ADDIU = 0x09,
 	LB = 0x20,
+	LH = 0x21,
 	LW = 0x23,
 	LBU = 0x24,
 	LHU = 0x25,
