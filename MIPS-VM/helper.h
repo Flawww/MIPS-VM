@@ -18,3 +18,4 @@ static To& bit_cast(const From& in) {
 
     return var;
 }
+

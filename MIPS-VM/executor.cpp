@@ -13,7 +13,7 @@ executor::executor(std::string file) {
 
     m_text.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(text), {});
     m_text.address = 0x00400000;
-    // ensure divisible by 4, MIPS instruction set is always 4 bytes
+    // ensure divisible by 4, MIPS instructions are always 4 bytes
     if ((m_text.sect.size() % 4) != 0) {
         printf("Size of bytecode not evenly divisible by 4, invalid.\n");
         return;
@@ -89,9 +89,8 @@ void executor::run() {
 
     printf("pc: %08X\n", m_regs.pc);
 
-    bool increment_pc = true;
+
     while (true) {
-        increment_pc = true;
 
         auto section = get_section_for_address(m_regs.pc);
         if (!section) { // trying to execute invalid memory - end of program or error
@@ -104,19 +103,17 @@ void executor::run() {
 
         // dispatch instruction now
         try {
-            if (!dispatch(inst)) {
-                increment_pc = false;
+            if (dispatch(inst)) {
+                m_regs.pc += 0x4; // next instruction - if dispatch returns false we don't increase pc
             }
         }
         catch (const std::runtime_error& e) {
-            printf("Error: %s", e.what());
+            printf("Error: %s\n", e.what());
+            printf("Error on instruction %02X (0x%08X)\n", inst.r.opcode, inst.hex);
             break;
         }
 
-        printf("%02X ", inst.i.opcode);
-        if (increment_pc) {
-            m_regs.pc += 0x4; // next instruction
-        }  
+        printf("Executing instruction: %02X (0x%08X)\n", inst.r.opcode, inst.hex);
     }
 }
 
@@ -180,10 +177,15 @@ bool executor::dispatch(instruction inst) {
         
     }
     break;
+    case uint32_t(instructions::MUL):
+    {
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] * m_regs.regs[inst.r.rt];
+    }
+    break;
     case uint32_t(instructions::J):
     {
-        uint32_t addr = inst.j.p_addr * 4;
-        addr |= (m_regs.pc + 4) & 0xF0000000;
+        uint32_t addr = inst.j.p_addr * 4; // lowest 28 bits are "direct"
+        addr |= (m_regs.pc + 4) & 0xF0000000; // Maintain the 4 upper bits of our current address-space 
         m_regs.pc = addr;
 
         return false; // dont advance pc
@@ -193,8 +195,8 @@ bool executor::dispatch(instruction inst) {
     {
         m_regs.regs[int(register_names::ra)] = m_regs.pc + 0x4;
 
-        uint32_t addr = inst.j.p_addr * 4;
-        addr |= (m_regs.pc + 4) & 0xF0000000;
+        uint32_t addr = inst.j.p_addr * 4; // lowest 28 bits are "direct"
+        addr |= (m_regs.pc + 4) & 0xF0000000; // Maintain the 4 upper bits of our current address-space 
         m_regs.pc = addr;
 
         return false; // dont advance pc
@@ -368,7 +370,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
-            throw std::runtime_error("Invalid memory access for SB operation");
+            throw std::runtime_error("Invalid memory access for SH operation");
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -391,117 +393,156 @@ bool executor::dispatch_funct(instruction inst) {
     break;
     case uint32_t(funct::SLL):
     {
-
-    }
-    break;
-    case uint32_t(funct::DIV):
-    {
-
-    }
-    break;
-    case uint32_t(funct::DIVU):
-    {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rt] << inst.r.shift;
     }
     break;
     case uint32_t(funct::SRL):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rt] >> inst.r.shift;
     }
     break;
     case uint32_t(funct::SLT):
     {
-
+        m_regs.regs[inst.r.rd] = (int32_t(m_regs.regs[inst.r.rs]) < int32_t(m_regs.regs[inst.r.rt]));
     }
     break;
     case uint32_t(funct::SLTU):
     {
-
+        m_regs.regs[inst.r.rd] = (m_regs.regs[inst.r.rs] < m_regs.regs[inst.r.rt]);
     }
     break;
     case uint32_t(funct::SRA):
     {
-
+        m_regs.regs[inst.r.rd] = int32_t(m_regs.regs[inst.r.rt]) >> inst.r.shift;
     }
     break;
     case uint32_t(funct::JR):
     {
+        m_regs.pc = m_regs.regs[inst.r.rs];
 
+        return false; // dont advance pc
     }
     break;
     case uint32_t(funct::JALR):
     {
+        m_regs.regs[int(register_names::ra)] = m_regs.pc + 0x4;
+        m_regs.pc = m_regs.regs[inst.r.rs];
 
+        return false; // dont advance pc
     }
     break;
     case uint32_t(funct::MFHI):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.hi;
     }
     break;
     case uint32_t(funct::MTHI):
     {
-
+        m_regs.hi = m_regs.regs[inst.r.rs];
     }
     break;
     case uint32_t(funct::MFLO):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.lo;
     }
     break;
     case uint32_t(funct::MTLO):
     {
+        m_regs.lo = m_regs.regs[inst.r.rs];
+    }
+    break;
+    case uint32_t(funct::DIV):
+    {
+        int32_t a = m_regs.regs[inst.r.rs];
+        int32_t b = m_regs.regs[inst.r.rt];
 
+        if (m_regs.regs[inst.r.rt] == 0) {
+            throw std::runtime_error("Attempted division by 0");
+        }
+
+        m_regs.hi = a % b;
+        m_regs.lo = a / b;
+    }
+    break;
+    case uint32_t(funct::DIVU):
+    {
+        uint32_t a = m_regs.regs[inst.r.rs];
+        uint32_t b = m_regs.regs[inst.r.rt];
+
+        if (m_regs.regs[inst.r.rt] == 0) {
+            throw std::runtime_error("Attempted division by 0");
+        }
+
+        m_regs.hi = a % b;
+        m_regs.lo = a / b;
     }
     break;
     case uint32_t(funct::MULT):
     {
-
+        int64_t res = int64_t(m_regs.regs[inst.r.rs]) * int64_t(m_regs.regs[inst.r.rt]);
+        m_regs.hi = res >> 32;
+        m_regs.lo = res & 0xFFFFFFFF;
     }
     break;
     case uint32_t(funct::MULTU):
     {
-
+        uint64_t res = uint64_t(m_regs.regs[inst.r.rs]) * uint64_t(m_regs.regs[inst.r.rt]);
+        m_regs.hi = res >> 32;
+        m_regs.lo = res & 0xFFFFFFFF;
     }
     break;
     case uint32_t(funct::ADD):
     {
+        int32_t a = m_regs.regs[inst.r.rs];
+        int32_t b = m_regs.regs[inst.r.rt];
+        // check for overflow
+        if ((b > 0 && a > std::numeric_limits<int32_t>::max() - b) || (b < 0 && a < std::numeric_limits<int32_t>::min() - b)) {
+            throw std::runtime_error("ADD operation overflowed: exception traps not yet implemented"); // TODO
+        }
 
+        m_regs.regs[inst.r.rd] = a + b;
     }
     break;
-    case uint32_t(funct::ADDU):
+    case uint32_t(funct::ADDU): 
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] + m_regs.regs[inst.r.rt];
     }
     break;
     case uint32_t(funct::SUB):
     {
+        int32_t a = m_regs.regs[inst.r.rs];
+        int32_t b = m_regs.regs[inst.r.rt];
+        // check for overflow
+        if ((b < 0 && a > std::numeric_limits<int32_t>::max() + b) || (b > 0 && a < std::numeric_limits<int32_t>::min() + b)) {
+            throw std::runtime_error("SUB operation overflowed: exception traps not yet implemented"); // TODO
+        }
 
+        m_regs.regs[inst.r.rd] = a - b;
     }
     break;
-    case uint32_t(funct::SUBU):
+    case uint32_t(funct::SUBU): 
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] - m_regs.regs[inst.r.rt];
     }
     break;
     case uint32_t(funct::AND):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] & m_regs.regs[inst.r.rt];
     }
     break;
     case uint32_t(funct::OR):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] | m_regs.regs[inst.r.rt];
     }
     break;
     case uint32_t(funct::XOR):
     {
-
+        m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rs] ^ m_regs.regs[inst.r.rt];
     }
     break;
     case uint32_t(funct::NOR):
     {
-
+        m_regs.regs[inst.r.rd] = ~(m_regs.regs[inst.r.rs] | m_regs.regs[inst.r.rt]);
     }
     break;
     default:
@@ -537,6 +578,10 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::PRINT_STRING):
     {
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(a0)) || !is_safe_access(sect, a0, 1)) { // make sure at least 1 byte is readable
+            throw std::runtime_error("Invalid memory access for PRINT_STRING syscall");
+        }
         printf("%s", (const char*)a0);
     }
     break;
@@ -563,11 +608,8 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::READ_STRING):
     {
-        section* sect = get_section_for_address(a0);
-        if (!sect) {
-            throw std::runtime_error("Invalid address passed to READ_STRING syscall");
-        }
-        if (!is_safe_access(sect, a0, a1)) {
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(a0)) || !is_safe_access(sect, a0, a1)) {
             throw std::runtime_error("Invalid memory access for READ_STRING syscall");
         }
 

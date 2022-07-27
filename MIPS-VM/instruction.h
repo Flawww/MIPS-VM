@@ -38,6 +38,7 @@ enum class instructions : int {
 	R_FORMAT = 0x00, // uses funct
 	MFC0 = 0x10,
 	MFC1 = 0x11,
+	MUL = 0x1C,
 
 	// J FORMAT
 	J = 0x02,
