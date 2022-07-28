@@ -13,9 +13,10 @@ executor::executor(std::string file) {
 
     m_text.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(text), {});
     m_text.address = 0x00400000;
+    m_text.flags = EXECUTABLE;
     // ensure divisible by 4, MIPS instructions are always 4 bytes
     if ((m_text.sect.size() % 4) != 0) {
-        printf("Size of bytecode not evenly divisible by 4, invalid.\n");
+        printf("Size of bytecode '%s.text' not evenly divisible by 4, invalid.\n", file.c_str());
         return;
     }
 
@@ -23,7 +24,14 @@ executor::executor(std::string file) {
     std::ifstream ktext(file + ".ktext", std::ios::binary);
     if (ktext.is_open()) {
         m_ktext.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(ktext), {});
-        m_ktext.address = 0x80000000;
+        if ((m_text.sect.size() % 4) != 0) {
+            printf("Size of bytecode '%s.ktext' not evenly divisible by 4, invalid.\n", file.c_str());
+            m_ktext = section();
+        }
+        else {
+            m_ktext.address = 0x80000000;
+            m_ktext.flags = EXECUTABLE;
+        }
     }
 
     // load data section if one exists
@@ -43,6 +51,10 @@ uint32_t executor::get_offset_for_section(section* sect, uint32_t addr) {
 }
 
 section* executor::get_section_for_address(uint32_t addr) {
+    if (addr == 0) {
+        return nullptr;
+    }
+
     if (addr >= m_data.address && addr < m_data.address + m_data.sect.size()) {
         return &m_data;
     }
@@ -74,47 +86,44 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
 }
 
 void executor::run() {
-    printf(".text length: %i\n.data length: %i\n", m_text.sect.size(), m_data.sect.size());
-    printf(".text\n");
-    for (int i = 0; i < m_text.sect.size() / 0x4; i++) {
-        printf("%08x\n", *reinterpret_cast<uint32_t*>(m_text.sect.data() + i * 0x4));
-    }
+    printf(".text length: %X\n.data length: %X\n\n", m_text.sect.size(), m_data.sect.size());
 
-    printf(".data\n");
-    for (int i = 0; i < 25; i++) {
-        printf("%c", m_data.sect[i]);
-    }
-    printf("\n");
-    printf("Test print: %s\n", m_data.sect.data());
+    printf("Executing bytecode...\n\n");
 
-    printf("pc: %08X\n", m_regs.pc);
-
-
+    instruction inst(0x0);
     while (true) {
-
-        auto section = get_section_for_address(m_regs.pc);
-        if (!section) { // trying to execute invalid memory - end of program or error
-            break;
-        }
-
-        uint32_t offset = m_regs.pc - section->address;
-        // read next instruction to execute 
-        instruction inst = instruction(*reinterpret_cast<uint32_t*>(section->sect.data() + offset));
-
-        // dispatch instruction now
         try {
+            section* section = get_section_for_address(m_regs.pc);
+            if (!section || !(section->flags & EXECUTABLE) || (m_regs.pc % 4 != 0)) { // trying to execute invalid memory
+                throw std::runtime_error("Invalid PC, tried executing invalid, protected or non-aligned memory");
+            }         
+
+            uint32_t offset = get_offset_for_section(section, m_regs.pc);
+            // read next instruction to execute 
+            inst = instruction(*reinterpret_cast<uint32_t*>(section->sect.data() + offset));
+
+            // dispatch instruction now
             if (dispatch(inst)) {
-                m_regs.pc += 0x4; // next instruction - if dispatch returns false we don't increase pc
+                m_regs.pc += 0x4; // next instruction - if dispatch returns false it means its a jump instruction, dont increase pc
             }
+
+            // check if we reached end of .text 
+            if (m_regs.pc == m_text.address + m_text.sect.size()) { // TODO: Can a program finish from kerneltext gracefully??
+                break; // exit graccefully
+            }
+        }
+        catch (const mips_exit_exception& e) {
+            printf("Exit() syscall invoked\n");
+            break;
         }
         catch (const std::runtime_error& e) {
             printf("Error: %s\n", e.what());
-            printf("Error on instruction %02X (0x%08X)\n", inst.r.opcode, inst.hex);
-            break;
+            printf("Error on instruction %02X (0x%08X) with PC: 0x%08X\n", inst.r.opcode, inst.hex, m_regs.pc);
+            return;
         }
-
-        printf("Executing instruction: %02X (0x%08X)\n", inst.r.opcode, inst.hex);
     }
+
+    printf("\nFinished executing\n");
 }
 
 bool executor::dispatch(instruction inst) {
@@ -343,7 +352,7 @@ bool executor::dispatch(instruction inst) {
         uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
         section* sect = nullptr;
-        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
+        if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
             throw std::runtime_error("Invalid memory access for SW operation");
         }
 
@@ -356,7 +365,7 @@ bool executor::dispatch(instruction inst) {
         uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
         section* sect = nullptr;
-        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
+        if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
             throw std::runtime_error("Invalid memory access for SB operation");
         }
 
@@ -369,7 +378,7 @@ bool executor::dispatch(instruction inst) {
         uint32_t addr = m_regs.regs[inst.i.rs] + bit_cast<int16_t>(inst.i.imm);
 
         section* sect = nullptr;
-        if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
+        if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
             throw std::runtime_error("Invalid memory access for SH operation");
         }
 
@@ -579,10 +588,18 @@ bool executor::dispatch_syscall() {
     case uint32_t(syscalls::PRINT_STRING):
     {
         section* sect = nullptr;
-        if (!(sect = get_section_for_address(a0)) || !is_safe_access(sect, a0, 1)) { // make sure at least 1 byte is readable
+        if (!(sect = get_section_for_address(a0))) { 
             throw std::runtime_error("Invalid memory access for PRINT_STRING syscall");
         }
-        printf("%s", (const char*)a0);
+        uint32_t offset = get_offset_for_section(sect, a0);
+        const char* str = (const char*)(sect->sect.data() + offset);
+
+        // make sure string actually terminates so we don't crash or leak memory
+        if (!string_terminates(str, sect->sect.size() - offset)) {
+            throw std::runtime_error("Invalid string for PRINT_STRING syscall, does not terminate");
+        }
+
+        printf("%s", str);
     }
     break;
     case uint32_t(syscalls::READ_INT):
@@ -609,7 +626,7 @@ bool executor::dispatch_syscall() {
     case uint32_t(syscalls::READ_STRING):
     {
         section* sect = nullptr;
-        if (!(sect = get_section_for_address(a0)) || !is_safe_access(sect, a0, a1)) {
+        if (!(sect = get_section_for_address(a0)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, a0, a1)) {
             throw std::runtime_error("Invalid memory access for READ_STRING syscall");
         }
 
@@ -636,7 +653,7 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::EXIT):
     {
-        throw std::runtime_error("Exit syscalled called");
+        throw mips_exit_exception();
     }
     break;
     case uint32_t(syscalls::PRINT_CHAR):

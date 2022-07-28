@@ -4,6 +4,7 @@
 #include "instruction.h"
 #include "memory.h"
 
+class mips_exit_exception : public std::exception { };
 
 class executor {
 public:

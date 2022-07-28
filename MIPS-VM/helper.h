@@ -19,3 +19,12 @@ static To& bit_cast(const From& in) {
     return var;
 }
 
+static bool string_terminates(const char* str, size_t buf_size) {
+    for (int i = 0; i < buf_size; i++) {
+        if (str[i] == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
