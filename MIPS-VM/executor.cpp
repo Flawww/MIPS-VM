@@ -88,8 +88,9 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
 void executor::run() {
     printf(".text length: %X\n.data length: %X\n\n", m_text.sect.size(), m_data.sect.size());
 
-    printf("Executing bytecode...\n\n");
+    printf("Executing bytecode...\n\n===========================================\n");
 
+    std::string exit_reason;
     instruction inst(0x0);
     while (true) {
         try {
@@ -106,24 +107,28 @@ void executor::run() {
             if (dispatch(inst)) {
                 m_regs.pc += 0x4; // next instruction - if dispatch returns false it means its a jump instruction, dont increase pc
             }
+   
+            m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it
 
             // check if we reached end of .text 
-            if (m_regs.pc == m_text.address + m_text.sect.size()) { // TODO: Can a program finish from kerneltext gracefully??
+            if (m_regs.pc == m_text.address + m_text.sect.size() || (m_ktext.address && m_regs.pc == m_ktext.address + m_ktext.sect.size())) {
+                exit_reason = "dropped off bottom";
                 break; // exit graccefully
             }
         }
         catch (const mips_exit_exception& e) {
-            printf("Exit() syscall invoked\n");
+            exit_reason = "EXIT syscall invoked";
             break;
         }
         catch (const std::runtime_error& e) {
             printf("Error: %s\n", e.what());
             printf("Error on instruction %02X (0x%08X) with PC: 0x%08X\n", inst.r.opcode, inst.hex, m_regs.pc);
+            exit_reason = "error occured during execution";
             return;
         }
     }
 
-    printf("\nFinished executing\n");
+    printf("\n===========================================\nFinished executing (%s)\n", exit_reason.c_str());
 }
 
 bool executor::dispatch(instruction inst) {
