@@ -244,7 +244,7 @@ bool executor::dispatch(instruction inst) {
     case uint32_t(instructions::BEQ):
     {
         if (m_regs.regs[inst.i.rs] == m_regs.regs[inst.i.rt]) {
-            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
+            m_regs.pc += 4 + bit_cast<int16_t>(inst.i.imm) * 4;
 
             return false; // dont advance pc
         }
@@ -253,7 +253,7 @@ bool executor::dispatch(instruction inst) {
     case uint32_t(instructions::BNE):
     {
         if (m_regs.regs[inst.i.rs] != m_regs.regs[inst.i.rt]) {
-            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
+            m_regs.pc += 4 + bit_cast<int16_t>(inst.i.imm) * 4;
 
             return false; // dont advance pc
         }
@@ -261,8 +261,8 @@ bool executor::dispatch(instruction inst) {
     break;
     case uint32_t(instructions::BLEZ):
     {
-        if (m_regs.regs[inst.i.rs] <= 0) {
-            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
+        if (int32_t(m_regs.regs[inst.i.rs]) <= 0) {
+            m_regs.pc += 4 + bit_cast<int16_t>(inst.i.imm) * 4;
 
             return false; // dont advance pc
         }
@@ -270,8 +270,8 @@ bool executor::dispatch(instruction inst) {
     break;
     case uint32_t(instructions::BGTZ):
     {
-        if (m_regs.regs[inst.i.rs] > 0) {
-            m_regs.pc += bit_cast<int16_t>(inst.i.imm) * 4;
+        if (int32_t(m_regs.regs[inst.i.rs]) > 0) {
+            m_regs.pc += 4 + bit_cast<int16_t>(inst.i.imm) * 4;
 
             return false; // dont advance pc
         }
@@ -612,6 +612,8 @@ bool executor::dispatch_syscall() {
         int32_t in;
         std::cin >> in;
         m_regs.regs[int(register_names::v0)] = in;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
     break;
     case uint32_t(syscalls::READ_FLOAT):
@@ -619,6 +621,8 @@ bool executor::dispatch_syscall() {
         float in;
         std::cin >> in;
         m_regs.f[0] = in;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
     break;
     case uint32_t(syscalls::READ_DBL):
@@ -626,6 +630,8 @@ bool executor::dispatch_syscall() {
         float in;
         std::cin >> in;
         m_regs.f[0] = in;
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     }
     break;
     case uint32_t(syscalls::READ_STRING):
