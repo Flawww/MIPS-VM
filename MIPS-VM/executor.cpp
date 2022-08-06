@@ -406,6 +406,11 @@ bool executor::dispatch_funct(instruction inst) {
         return dispatch_syscall();
     }
     break;
+    case uint32_t(funct::BREAK): 
+    {
+        throw std::runtime_error("Breakpoint encountered");
+    }
+    break;
     case uint32_t(funct::SLL):
     {
         m_regs.regs[inst.r.rd] = m_regs.regs[inst.r.rt] << inst.r.shift;

@@ -68,6 +68,7 @@ enum class instructions : int {
 
 enum class funct : int {
 	SYSCALL = 0x0C,
+	BREAK = 0x0D,
 	SLL = 0x00,
 	DIV = 0x1A,
 	DIVU = 0x1B,
