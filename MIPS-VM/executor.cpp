@@ -15,7 +15,7 @@ executor::executor(std::string file) {
     m_text.address = 0x00400000;
     m_text.flags = EXECUTABLE;
     // ensure divisible by 4, MIPS instructions are always 4 bytes
-    if ((m_text.sect.size() % 4) != 0) {
+    if (m_text.sect.size() & 0x3) {
         printf("Size of bytecode '%s.text' not evenly divisible by 4, invalid.\n", file.c_str());
         return;
     }
@@ -24,7 +24,8 @@ executor::executor(std::string file) {
     std::ifstream ktext(file + ".ktext", std::ios::binary);
     if (ktext.is_open()) {
         m_ktext.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(ktext), {});
-        if ((m_text.sect.size() % 4) != 0) {
+        // ensure divisible by 4
+        if (m_text.sect.size() & 0x3) {
             printf("Size of bytecode '%s.ktext' not evenly divisible by 4, invalid.\n", file.c_str());
             m_ktext = section();
         }
@@ -95,7 +96,7 @@ void executor::run() {
     while (true) {
         try {
             section* section = get_section_for_address(m_regs.pc);
-            if (!section || !(section->flags & EXECUTABLE) || (m_regs.pc % 4 != 0)) { // trying to execute invalid memory
+            if (!section || !(section->flags & EXECUTABLE) || (m_regs.pc & 0x3)) { // trying to execute invalid memory (Invalid address, not an executable section or address not 4-aligned)
                 throw std::runtime_error("Invalid PC, tried executing invalid, protected or non-aligned memory");
             }         
 
@@ -117,7 +118,7 @@ void executor::run() {
             }
         }
         catch (const mips_exit_exception& e) {
-            exit_reason = "EXIT syscall invoked";
+            exit_reason = std::string(e.what());
             break;
         }
         catch (const std::runtime_error& e) {
@@ -675,6 +676,16 @@ bool executor::dispatch_syscall() {
     case uint32_t(syscalls::READ_CHAR):
     {
         m_regs.regs[int(register_names::v0)] = getchar();
+    }
+    break;
+    case uint32_t(syscalls::EXIT2):
+    {
+        throw mips_exit_exception("EXIT syscall invoked, terminating with value " + std::to_string(a0));
+    }
+    break;
+    case uint32_t(syscalls::SLEEP):
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(a0));
     }
     break;
     default:

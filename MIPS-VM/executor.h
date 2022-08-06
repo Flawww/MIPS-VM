@@ -4,7 +4,10 @@
 #include "instruction.h"
 #include "memory.h"
 
-class mips_exit_exception : public std::exception { };
+class mips_exit_exception : public std::exception {
+public:
+	mips_exit_exception(std::string reason = "EXIT syscall invoked"): std::exception(reason.c_str()) {}
+};
 
 class executor {
 public:

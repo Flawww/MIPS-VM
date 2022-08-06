@@ -106,4 +106,6 @@ enum class syscalls : int {
 	EXIT = 10,
 	PRINT_CHAR = 11,
 	READ_CHAR = 12,
+	EXIT2 = 17,
+	SLEEP = 32,
 };
