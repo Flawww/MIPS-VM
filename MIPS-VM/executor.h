@@ -28,9 +28,7 @@ private:
 
 	registers m_regs;
 
-	section m_data;
-	section m_text;
-	section m_ktext;
+	std::array<section, NUM_SECTIONS> m_sections;
 
 	heap m_heap;
 	stack m_stack;

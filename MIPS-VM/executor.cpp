@@ -5,45 +5,37 @@
 executor::executor(std::string file) {
     m_can_run = false;
 
-    // load text section
-    std::ifstream text(file + ".text", std::ios::binary);
-    if (!text.is_open()) {
-        return;
-    }
-
-    m_text.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(text), {});
-    m_text.address = 0x00400000;
-    m_text.flags = EXECUTABLE;
-    // ensure divisible by 4, MIPS instructions are always 4 bytes
-    if (m_text.sect.size() & 0x3) {
-        printf("Size of bytecode '%s.text' not evenly divisible by 4, invalid.\n", file.c_str());
-        return;
-    }
-
-    // load ktext section if one exists
-    std::ifstream ktext(file + ".ktext", std::ios::binary);
-    if (ktext.is_open()) {
-        m_ktext.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(ktext), {});
-        // ensure divisible by 4
-        if (m_text.sect.size() & 0x3) {
-            printf("Size of bytecode '%s.ktext' not evenly divisible by 4, invalid.\n", file.c_str());
-            m_ktext = section();
+    // load all existing sections
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        std::ifstream bin(file + section_names[i], std::ios::binary);
+        if (!bin.is_open()) {
+            continue;
         }
-        else {
-            m_ktext.address = 0x80000000;
-            m_ktext.flags = EXECUTABLE;
+
+        // read the binary file into a buffer
+        m_sections[i].sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(bin), {});
+        m_sections[i].flags = section_protection[i]; // get the protection flags for this section
+
+        // make sure executable sections are aligned to 4 bytes and a nonzero size (4 first bytes of the buffer is used for the section address)
+        if ((m_sections[i].flags & EXECUTABLE && m_sections[i].sect.size() & 0x3) || m_sections[i].sect.size() - 4 <= 0) {
+            printf("Size of binary file '%s%s' too small or unaligned (%X bytes)\n", file.c_str(), section_names[i], m_sections[i].sect.size() - 4);
+            m_sections[i] = section();
+            continue;
         }
+
+        // read the first 4 bytes of the loaded file, it denotes the address of the section
+        m_sections[i].address = *reinterpret_cast<uint32_t*>(m_sections[i].sect.data());
+        // remove the 4 byte section address at the start of the buffer
+        m_sections[i].sect.erase(m_sections[i].sect.begin(), m_sections[i].sect.begin() + 4);
     }
 
-    // load data section if one exists
-    std::ifstream data(file + ".data", std::ios::binary);
-    if (data.is_open()) {
-        m_data.sect = std::vector<uint8_t>(std::istreambuf_iterator<char>(data), {});
-        m_data.address = 0x10010000;
+    if (!m_sections[TEXT].address) {
+        printf(".text section for program %s not loaded - aborting\n", file.c_str());
+        return;
     }
     
     m_regs.regs[int(register_names::sp)] = 0x7FFFEFFC;
-    m_regs.pc = m_text.address;
+    m_regs.pc = m_sections[TEXT].address;
     m_can_run = true;
 }
 
@@ -56,16 +48,15 @@ section* executor::get_section_for_address(uint32_t addr) {
         return nullptr;
     }
 
-    if (addr >= m_data.address && addr < m_data.address + m_data.sect.size()) {
-        return &m_data;
+    // check if its in a section from the "binary" file
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        if (addr >= m_sections[i].address && addr < m_sections[i].address + m_sections[i].sect.size()) {
+            return &m_sections[i];
+        }
     }
-    else if (addr >= m_text.address && addr < m_text.address + m_text.sect.size()) {
-        return &m_text;
-    }
-    else if (addr >= m_ktext.address && addr < m_ktext.address + m_ktext.sect.size()) {
-        return &m_ktext;
-    }
-    else if (m_heap.get_section_if_valid_heap(addr)) {
+
+    // check heap & stack
+    if (m_heap.get_section_if_valid_heap(addr)) {
         return m_heap.get_section_if_valid_heap(addr);
     }
     else if (m_stack.get_section_if_valid_stack(addr)) {
@@ -87,9 +78,11 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
 }
 
 void executor::run() {
-    printf(".text length: %X\n.data length: %X\n\n", m_text.sect.size(), m_data.sect.size());
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        printf(".%-8s @ %08X, length %X\n", m_sections[i].address, m_sections[i].sect.size());
+    }
 
-    printf("Executing bytecode...\n\n===========================================\n");
+    printf("\nExecuting bytecode...\n\n===========================================\n");
 
     std::string exit_reason;
     instruction inst(0x0);
@@ -112,7 +105,7 @@ void executor::run() {
             m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it
 
             // check if we reached end of .text 
-            if (m_regs.pc == m_text.address + m_text.sect.size() || (m_ktext.address && m_regs.pc == m_ktext.address + m_ktext.sect.size())) {
+            if (m_regs.pc == m_sections[TEXT].address + m_sections[TEXT].sect.size() || (m_sections[KTEXT].address && m_regs.pc == m_sections[KTEXT].address + m_sections[KTEXT].sect.size())) {
                 exit_reason = "dropped off bottom";
                 break; // exit graccefully
             }

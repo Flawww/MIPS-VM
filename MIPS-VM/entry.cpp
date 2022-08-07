@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     // start the vm with the specified input file
     executor vm(program);
     if (!vm.can_run()) {
-        printf("VM executor could not be initialized\n");
+        printf("Error: MIPS Virtual Machine could not be initialized\n");
         return 1;
     }
 
