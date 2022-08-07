@@ -35,7 +35,7 @@ private:
 
 	uint32_t m_tick;
 
+	bool m_has_exception_handler;
 	bool m_kernelmode;
-
 	bool m_can_run;
 };

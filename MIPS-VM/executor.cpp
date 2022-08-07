@@ -2,7 +2,7 @@
 #include "executor.h"
 #include "helper.h"
 
-executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(false) {
+executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(false), m_has_exception_handler(false) {
 
     // load all existing sections
     for (int i = 0; i < NUM_SECTIONS; i++) {
@@ -31,6 +31,12 @@ executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(
     if (!m_sections[TEXT].address) {
         printf(".text section for program %s not loaded - aborting\n", file.c_str());
         return;
+    }
+
+    // check if exception handler exists
+    section* ktext = get_section_for_address(EXCEPTION_HANDLER);
+    if (ktext && ktext->address == m_sections[KTEXT].address) {
+        m_has_exception_handler = true; // address 0x80000180 (exception handler) is valid and in .ktext, exception handler exists.
     }
 
     // create MMIO section
@@ -101,7 +107,11 @@ void executor::run() {
 
     std::string exit_reason;
     instruction inst(0x0);
+
     while (true) {
+        bool error_state = false;
+        std::exception err;
+
         try {
             section* section = get_section_for_address(m_regs.pc);
             if (!section || !(section->flags & EXECUTABLE) || (m_regs.pc & 0x3)) { // trying to execute invalid memory (Invalid address, not an executable section or address not 4-aligned)
@@ -121,7 +131,7 @@ void executor::run() {
                 m_regs.pc += 0x4; // next instruction - if dispatch returns false it means its a jump instruction, dont increase pc
             }
    
-            m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it
+            m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it immediately
 
             // check keyboard interrupt(s)
             keyboard_interrupt();
@@ -132,16 +142,40 @@ void executor::run() {
                 break; // exit graccefully
             }
         }
-        catch (const mips_exception_exit& e) {
+        catch (const mips_exception_exit& e) { // EXIT syscall
             exit_reason = std::string(e.what());
             break;
         }
-        catch (const std::runtime_error& e) {
-            printf("Error: %s\n", e.what());
+        catch (const mips_exception& e) { // generic exception that a exception handler could handle
+            if (m_has_exception_handler) {
+                if (e.invalid_memory_address()) {
+                    m_regs.vaddr = e.get_vaddr(); // set vaddr to invalid address if the exception was an invalid memory address
+                }
+
+                m_regs.status = (1 << 1); // bit 1 is set
+                m_regs.cause = e.exception_type() << 2; // bits 2-6 of cause is exception type. bit 8 is pending interrupt. Shift left by 2 to make it the correct bits.
+                m_regs.epc = m_regs.pc; // save pc of instruction which caused exception
+
+                m_kernelmode = true; // enter kernelmode
+                m_regs.pc = EXCEPTION_HANDLER;
+            }
+            else {
+                err = e;
+                error_state = true;
+            }
+        }
+        catch (const std::exception& e) {
+            err = e;
+            error_state = true;          
+        }
+
+        if (error_state) {
+            printf("Error: %s\n", err.what());
             printf("Error on instruction %02X (0x%08X) with PC: 0x%08X\n", inst.r.opcode, inst.hex, m_regs.pc);
             exit_reason = "error occured during execution";
-            return;
+            break;
         }
+
         m_tick++;
     }
 
@@ -342,7 +376,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
-            throw std::runtime_error("Invalid memory access for LW operation");
+            throw mips_exception_load("Invalid memory access for LW operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -355,7 +389,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(int8_t))) {
-            throw std::runtime_error("Invalid memory access for LB operation");
+            throw mips_exception_load("Invalid memory access for LB operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -368,7 +402,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(int16_t))) {
-            throw std::runtime_error("Invalid memory access for LH operation");
+            throw mips_exception_load("Invalid memory access for LH operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -381,7 +415,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
-            throw std::runtime_error("Invalid memory access for LBU operation");
+            throw mips_exception_load("Invalid memory access for LBU operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -394,7 +428,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
-            throw std::runtime_error("Invalid memory access for LHU operation");
+            throw mips_exception_load("Invalid memory access for LHU operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -407,7 +441,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint32_t))) {
-            throw std::runtime_error("Invalid memory access for SW operation");
+            throw mips_exception_store("Invalid memory access for SW operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -420,7 +454,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint8_t))) {
-            throw std::runtime_error("Invalid memory access for SB operation");
+            throw mips_exception_store("Invalid memory access for SB operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -433,7 +467,7 @@ bool executor::dispatch(instruction inst) {
 
         section* sect = nullptr;
         if (!(sect = get_section_for_address(addr)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, addr, sizeof(uint16_t))) {
-            throw std::runtime_error("Invalid memory access for SH operation");
+            throw mips_exception_store("Invalid memory access for SH operation", addr);
         }
 
         uint32_t offset = get_offset_for_section(sect, addr);
@@ -456,7 +490,7 @@ bool executor::dispatch_funct(instruction inst) {
     break;
     case uint32_t(funct::BREAK): 
     {
-        throw std::runtime_error("Breakpoint encountered");
+        throw mips_exception_breakpoint("Breakpoint encountered");
     }
     break;
     case uint32_t(funct::SLL):
@@ -525,7 +559,7 @@ bool executor::dispatch_funct(instruction inst) {
         int32_t b = m_regs.regs[inst.r.rt];
 
         if (m_regs.regs[inst.r.rt] == 0) {
-            throw std::runtime_error("Attempted division by 0");
+            throw mips_exception_zero_division("Attempted division by 0");
         }
 
         m_regs.hi = a % b;
@@ -538,7 +572,7 @@ bool executor::dispatch_funct(instruction inst) {
         uint32_t b = m_regs.regs[inst.r.rt];
 
         if (m_regs.regs[inst.r.rt] == 0) {
-            throw std::runtime_error("Attempted division by 0");
+            throw mips_exception_zero_division("Attempted division by 0");
         }
 
         m_regs.hi = a % b;
@@ -565,7 +599,7 @@ bool executor::dispatch_funct(instruction inst) {
         int32_t b = m_regs.regs[inst.r.rt];
         // check for overflow
         if ((b > 0 && a > std::numeric_limits<int32_t>::max() - b) || (b < 0 && a < std::numeric_limits<int32_t>::min() - b)) {
-            throw std::runtime_error("ADD operation overflowed: exception traps not yet implemented"); // TODO
+            throw mips_exception_arithmetic_overflow("ADD operation overflowed");
         }
 
         m_regs.regs[inst.r.rd] = a + b;
@@ -582,7 +616,7 @@ bool executor::dispatch_funct(instruction inst) {
         int32_t b = m_regs.regs[inst.r.rt];
         // check for overflow
         if ((b < 0 && a > std::numeric_limits<int32_t>::max() + b) || (b > 0 && a < std::numeric_limits<int32_t>::min() + b)) {
-            throw std::runtime_error("SUB operation overflowed: exception traps not yet implemented"); // TODO
+            throw mips_exception_arithmetic_overflow("SUB operation overflowed");
         }
 
         m_regs.regs[inst.r.rd] = a - b;
@@ -614,7 +648,7 @@ bool executor::dispatch_funct(instruction inst) {
     }
     break;
     default:
-        throw std::runtime_error("Invalid funct number for R-format");
+        throw std::runtime_error("Invalid funct number");
     }
 
     return true;
@@ -648,14 +682,14 @@ bool executor::dispatch_syscall() {
     {
         section* sect = nullptr;
         if (!(sect = get_section_for_address(a0))) { 
-            throw std::runtime_error("Invalid memory access for PRINT_STRING syscall");
+            throw mips_exception_load("Invalid memory access for PRINT_STRING syscall", a0);
         }
         uint32_t offset = get_offset_for_section(sect, a0);
         const char* str = (const char*)(sect->sect.data() + offset);
 
         // make sure string actually terminates so we don't crash or leak memory
         if (!string_terminates(str, sect->sect.size() - offset)) {
-            throw std::runtime_error("Invalid string for PRINT_STRING syscall, does not terminate");
+            throw mips_exception_load("Invalid string for PRINT_STRING syscall, does not terminate", a0);
         }
 
         printf("%s", str);
@@ -695,7 +729,7 @@ bool executor::dispatch_syscall() {
     {
         section* sect = nullptr;
         if (!(sect = get_section_for_address(a0)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, a0, a1)) {
-            throw std::runtime_error("Invalid memory access for READ_STRING syscall");
+            throw mips_exception_store("Invalid memory access for READ_STRING syscall", a0);
         }
 
         disable_conio_mode();
@@ -748,7 +782,8 @@ bool executor::dispatch_syscall() {
     }
     break;
     default:
-        throw std::runtime_error("Syscall number " + std::to_string(syscall_num) + " not implemented");
+        throw mips_exception_syscall("Syscall number " + std::to_string(syscall_num) + " not implemented");
+        //throw std::runtime_error("Syscall number " + std::to_string(syscall_num) + " not implemented");
         
     }
 

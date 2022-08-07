@@ -29,32 +29,35 @@ public:
 	virtual uint32_t exception_type() const {
 		return INVALID_EXCEPTION;
 	}
+
+	virtual uint32_t get_vaddr() const {
+		return 0;
+	}
+
+	virtual bool invalid_memory_address() const {
+		return false;
+	}
 };
 
 class mips_exception_memory : public mips_exception {
 public:
 	mips_exception_memory(std::string reason, uint32_t addr) : mips_exception(reason), m_vaddr(addr) {}
 
-	uint32_t get_vaddr() const {
+	virtual uint32_t get_vaddr() const override {
 		return m_vaddr;
+	}
+
+	virtual bool invalid_memory_address() const override {
+		return true;
 	}
 
 private:
 	uint32_t m_vaddr;
 };
 
-class mips_exception_interrupt : public mips_exception {
-public:
-	mips_exception_interrupt(std::string reason): mips_exception(reason) {}
-
-	virtual uint32_t exception_type() const override {
-		return (1 << 6) | INTERRUPT_EXCEPTION; // the caller will leftshift by 2, which would make the 8th bit set (and exception number 0)
-	}
-};
-
 class mips_exception_load : public mips_exception_memory {
 public:
-	mips_exception_load(std::string reason, uint32_t addr): mips_exception_memory(reason, addr) {}
+	mips_exception_load(std::string reason, uint32_t addr) : mips_exception_memory(reason, addr) {}
 
 	virtual uint32_t exception_type() const override {
 		return ADDRESS_EXCEPTION_LOAD;
@@ -67,6 +70,15 @@ public:
 
 	virtual uint32_t exception_type() const override {
 		return ADDRESS_EXCEPTION_STORE;
+	}
+};
+
+class mips_exception_interrupt : public mips_exception {
+public:
+	mips_exception_interrupt(std::string reason): mips_exception(reason) {}
+
+	virtual uint32_t exception_type() const override {
+		return (1 << 6) | INTERRUPT_EXCEPTION; // the caller will leftshift by 2, which would make the 8th bit set (and exception number 0)
 	}
 };
 

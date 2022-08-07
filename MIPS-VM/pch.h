@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <signal.h>
-#include <sys/ioctl.h>
 #include <fcntl.h>
 #endif
 
