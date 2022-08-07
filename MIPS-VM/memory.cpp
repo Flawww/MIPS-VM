@@ -2,11 +2,12 @@
 #include "memory.h"
 
 #define STACK_SIZE 0x20000000 // about 500 mb
-#define STACK_TOP 0x7FFFEFFF
+#define STACK_TOP 0x7FFFF000
 #define STACK_BOTTOM STACK_TOP - STACK_SIZE
 
 stack::stack() {
-	m_stack.address = STACK_TOP; // stack "end"
+	m_stack = section();
+	m_stack.address = STACK_BOTTOM;
 	m_stack.sect.resize(STACK_SIZE, 0);
 }
 
@@ -38,6 +39,7 @@ bool stack::is_safe_access(uint32_t addr, uint32_t size) {
 heap::heap() {
 	m_heap_offset = 0;
 
+	m_heap = section();
 	m_heap.address = SBRK_HEAP_START;
 	m_heap.sect.resize(SBRK_HEAP_END - SBRK_HEAP_START, 0);
 }

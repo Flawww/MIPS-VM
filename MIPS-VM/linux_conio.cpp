@@ -137,9 +137,9 @@ int getch_noblock() {
 
 #else
 // Windows versions of the functions (Windows has _getch() and _kbhit() by default)
-void setup_signal_interceptor() {}
-void disable_conio_mode() {}
-void enable_conio_mode() {}
+void setup_signal_interceptor() { return; }
+void disable_conio_mode() { return; }
+void enable_conio_mode() { return; }
 
 int getch_noblock() {
     if (_kbhit()) {

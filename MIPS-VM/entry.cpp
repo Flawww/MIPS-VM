@@ -23,6 +23,10 @@ int main(int argc, char** argv) {
         program = std::string(argv[1]);
     }
     
+    // set up signal handling for conio on Linux
+    setup_signal_interceptor();
+
+
     // start the vm with the specified input file
     executor vm(program);
     if (!vm.can_run()) {

@@ -90,11 +90,13 @@ section* executor::get_section_for_address(uint32_t addr) {
 bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
     uint32_t sect_start = sect->address;
     uint32_t sect_end = sect->address + sect->sect.size();
+    //printf("%X %X %X\n", sect_start, sect_end, size);
     if (addr < sect_start || addr >= sect_end ||
         addr + size < sect_start || addr + size > sect_end) {
+        //printf("stupid: %X %X %X\n", addr + size > sect_end, addr + size, sect_end);
         return false;
     }
-
+    //printf("true\n");
     return true;
 }
 
@@ -130,7 +132,6 @@ void executor::run() {
             if (dispatch(inst)) {
                 m_regs.pc += 0x4; // next instruction - if dispatch returns false it means its a jump instruction, dont increase pc
             }
-   
             m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it immediately
 
             // check keyboard interrupt(s)
@@ -190,7 +191,7 @@ void executor::keyboard_interrupt() {
     }
     enable_conio_mode(); // enable conio mode (for linux) to be able to use getch
 
-    // Use Mars' default value of 5 ticks (the keyboard interrupt data will only update at most once every 5 ticks)
+    // Use Mars' default value of 5 tick update interval (the keyboard interrupt data will only update at most once every 5 ticks)
     if (m_tick % 5 != 0) {
         return;
     }
