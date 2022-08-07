@@ -3,11 +3,7 @@
 #include "registers.h"
 #include "instruction.h"
 #include "memory.h"
-
-class mips_exit_exception : public std::exception {
-public:
-	mips_exit_exception(std::string reason = "EXIT syscall invoked"): std::exception(reason.c_str()) {}
-};
+#include "exceptions.h"
 
 class executor {
 public:
@@ -22,6 +18,8 @@ private:
 	bool dispatch_funct(instruction inst);
 	bool dispatch_syscall();
 
+	void keyboard_interrupt();
+
 	uint32_t get_offset_for_section(section* sect, uint32_t addr);
 	section* get_section_for_address(uint32_t addr);
 	bool is_safe_access(section* sect, uint32_t addr, uint32_t size);
@@ -30,8 +28,14 @@ private:
 
 	std::array<section, NUM_SECTIONS> m_sections;
 
+	section m_mmio;
+
 	heap m_heap;
 	stack m_stack;
+
+	uint32_t m_tick;
+
+	bool m_kernelmode;
 
 	bool m_can_run;
 };

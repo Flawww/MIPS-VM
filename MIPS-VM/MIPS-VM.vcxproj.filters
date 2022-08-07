@@ -30,6 +30,9 @@
     <ClCompile Include="memory.cpp">
       <Filter>vm</Filter>
     </ClCompile>
+    <ClCompile Include="linux_conio.cpp">
+      <Filter>vm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -48,6 +51,15 @@
       <Filter>vm</Filter>
     </ClInclude>
     <ClInclude Include="helper.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="sections.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="linux_conio.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="exceptions.h">
       <Filter>vm</Filter>
     </ClInclude>
   </ItemGroup>

@@ -2,8 +2,7 @@
 #include "executor.h"
 #include "helper.h"
 
-executor::executor(std::string file) {
-    m_can_run = false;
+executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(false) {
 
     // load all existing sections
     for (int i = 0; i < NUM_SECTIONS; i++) {
@@ -33,9 +32,15 @@ executor::executor(std::string file) {
         printf(".text section for program %s not loaded - aborting\n", file.c_str());
         return;
     }
+
+    // create MMIO section
+    m_mmio.sect.resize(2 * sizeof(uint32_t), 0); // 8 bytes
+    m_mmio.flags = MUTABLE;
+    m_mmio.address = 0xFFFF0000;
     
     m_regs.regs[int(register_names::sp)] = 0x7FFFEFFC;
     m_regs.pc = m_sections[TEXT].address;
+
     m_can_run = true;
 }
 
@@ -48,8 +53,12 @@ section* executor::get_section_for_address(uint32_t addr) {
         return nullptr;
     }
 
-    // check if its in a section from the "binary" file
+    // check if its in a section from the "executable" (text, data, ktext or kdata)
     for (int i = 0; i < NUM_SECTIONS; i++) {
+        // skip kernelmode address space if we are not in kernelmode
+        if ((i == KTEXT || i == KDATA) && !m_kernelmode) {
+            continue;
+        }
         if (addr >= m_sections[i].address && addr < m_sections[i].address + m_sections[i].sect.size()) {
             return &m_sections[i];
         }
@@ -63,6 +72,12 @@ section* executor::get_section_for_address(uint32_t addr) {
         return m_stack.get_section_if_valid_stack(addr);
     }
 
+    // finally check MMIO
+    if (addr >= m_mmio.address && addr < m_mmio.address + m_mmio.sect.size()) {
+        return &m_mmio;
+    }
+
+    // Invalid address, return null
     return nullptr;
 }
 
@@ -79,7 +94,7 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
 
 void executor::run() {
     for (int i = 0; i < NUM_SECTIONS; i++) {
-        printf(".%-8s @ %08X, length %X\n", m_sections[i].address, m_sections[i].sect.size());
+        printf(".%s @ %08X, length %X\n", section_names[i], m_sections[i].address, m_sections[i].sect.size());
     }
 
     printf("\nExecuting bytecode...\n\n===========================================\n");
@@ -91,7 +106,11 @@ void executor::run() {
             section* section = get_section_for_address(m_regs.pc);
             if (!section || !(section->flags & EXECUTABLE) || (m_regs.pc & 0x3)) { // trying to execute invalid memory (Invalid address, not an executable section or address not 4-aligned)
                 throw std::runtime_error("Invalid PC, tried executing invalid, protected or non-aligned memory");
-            }         
+            }
+            // get_section_for_address will not return a kernelmode address if we are currently in usermode, but we don't want to execute usermode .text from kernelmode either
+            if (m_kernelmode && section->address == m_sections[TEXT].address) {
+                throw std::runtime_error("Tried executing usermode memory from kernelmode");
+            }
 
             uint32_t offset = get_offset_for_section(section, m_regs.pc);
             // read next instruction to execute 
@@ -104,13 +123,16 @@ void executor::run() {
    
             m_regs.regs[0] = 0; // in case if someone wrote to $zero, make sure to reset it
 
+            // check keyboard interrupt(s)
+            keyboard_interrupt();
+
             // check if we reached end of .text 
             if (m_regs.pc == m_sections[TEXT].address + m_sections[TEXT].sect.size() || (m_sections[KTEXT].address && m_regs.pc == m_sections[KTEXT].address + m_sections[KTEXT].sect.size())) {
                 exit_reason = "dropped off bottom";
                 break; // exit graccefully
             }
         }
-        catch (const mips_exit_exception& e) {
+        catch (const mips_exception_exit& e) {
             exit_reason = std::string(e.what());
             break;
         }
@@ -120,9 +142,35 @@ void executor::run() {
             exit_reason = "error occured during execution";
             return;
         }
+        m_tick++;
     }
 
     printf("\n===========================================\nFinished executing (%s)\n", exit_reason.c_str());
+}
+
+void executor::keyboard_interrupt() {
+    bool controller = *reinterpret_cast<uint32_t*>(m_mmio.sect.data()) & 0x2; // check bit 1 for "Keyboard interrupt enable"
+    if (!controller) {
+        disable_conio_mode(); // if keyboard interrupts are disabled, disable conio mode (linux)
+        return;
+    }
+    enable_conio_mode(); // enable conio mode (for linux) to be able to use getch
+
+    // Use Mars' default value of 5 ticks (the keyboard interrupt data will only update at most once every 5 ticks)
+    if (m_tick % 5 != 0) {
+        return;
+    }
+
+    char c = getch_noblock(); // read a character from stdin stream
+    if (c == EOF) {
+        return; // no character to read 
+    }
+
+    // write the character into mmio reciever data
+    *reinterpret_cast<char*>(m_mmio.sect.data() + sizeof(uint32_t)) = c;
+
+    // Throw interrupt exception
+    throw mips_exception_interrupt("Keyboard interrupt");
 }
 
 bool executor::dispatch(instruction inst) {
@@ -133,8 +181,15 @@ bool executor::dispatch(instruction inst) {
         return dispatch_funct(inst);
     }
     break;
-    case uint32_t(instructions::MFC0):
+    //case uint32_t(instructions::ERET): // ERET has same opcode as MFC0
+    case uint32_t(instructions::MFC0): 
     {
+        if (inst.r.funct == 0x18) { // ERET (funct 0x18)
+            m_regs.pc = m_regs.epc; // go back to usermode
+            m_kernelmode = false;
+            return false;
+        }
+
         // rs - which operation to do from c0 (move to or from)
         // rt - register index
         // rd - coproc0 index
@@ -559,7 +614,7 @@ bool executor::dispatch_funct(instruction inst) {
     }
     break;
     default:
-        return false;
+        throw std::runtime_error("Invalid funct number for R-format");
     }
 
     return true;
@@ -608,6 +663,7 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::READ_INT):
     {
+        disable_conio_mode();
         int32_t in;
         std::cin >> in;
         m_regs.regs[int(register_names::v0)] = in;
@@ -617,6 +673,7 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::READ_FLOAT):
     {
+        disable_conio_mode();
         float in;
         std::cin >> in;
         m_regs.f[0] = in;
@@ -626,6 +683,7 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::READ_DBL):
     {
+        disable_conio_mode();
         float in;
         std::cin >> in;
         m_regs.f[0] = in;
@@ -639,6 +697,8 @@ bool executor::dispatch_syscall() {
         if (!(sect = get_section_for_address(a0)) || !(sect->flags & MUTABLE) || !is_safe_access(sect, a0, a1)) {
             throw std::runtime_error("Invalid memory access for READ_STRING syscall");
         }
+
+        disable_conio_mode();
 
         std::string in;
         std::getline(std::cin, in);
@@ -663,7 +723,7 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::EXIT):
     {
-        throw mips_exit_exception();
+        throw mips_exception_exit();
     }
     break;
     case uint32_t(syscalls::PRINT_CHAR):
@@ -673,12 +733,13 @@ bool executor::dispatch_syscall() {
     break;
     case uint32_t(syscalls::READ_CHAR):
     {
+        disable_conio_mode();
         m_regs.regs[int(register_names::v0)] = getchar();
     }
     break;
     case uint32_t(syscalls::EXIT2):
     {
-        throw mips_exit_exception("EXIT syscall invoked, terminating with value " + std::to_string(a0));
+        throw mips_exception_exit("EXIT syscall invoked, terminating with value " + std::to_string(a0));
     }
     break;
     case uint32_t(syscalls::SLEEP):
