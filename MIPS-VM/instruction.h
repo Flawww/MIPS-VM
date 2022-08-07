@@ -46,6 +46,7 @@ enum class instructions : int {
 	JAL = 0x03,
 
 	// I FORMAT
+	TRAPI = 0x01,
 	SLTI = 0x0A,
 	SLTIU = 0x0B,
 	ANDI = 0x0C,
@@ -93,6 +94,12 @@ enum class funct : int {
 	OR = 0x25,
 	XOR = 0x26,
 	NOR = 0x27,
+	TGE = 0x30,
+	TGEU = 0x31,
+	TLT = 0x32,
+	TLTU = 0x33,
+	TEQ = 0x34,
+	TNE = 0x36,
 };
 
 enum class syscalls : int {
@@ -110,4 +117,14 @@ enum class syscalls : int {
 	READ_CHAR = 12,
 	EXIT2 = 17,
 	SLEEP = 32,
+};
+
+// Stored in the "rt" bits for I-format trap instructions
+enum class imm_trap_instructions : int {
+	TGEI = 8,
+	TGEIU = 9,
+	TLTI = 10,
+	TLTIU = 11,
+	TEQI = 12,
+	TNEI = 14,
 };

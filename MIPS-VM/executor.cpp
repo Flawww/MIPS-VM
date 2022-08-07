@@ -34,10 +34,12 @@ executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(
     }
 
     // check if exception handler exists
+    m_kernelmode = true; // need to set the kernelmode flag to true to be able to get the kernelmode section
     section* ktext = get_section_for_address(EXCEPTION_HANDLER);
     if (ktext && ktext->address == m_sections[KTEXT].address) {
         m_has_exception_handler = true; // address 0x80000180 (exception handler) is valid and in .ktext, exception handler exists.
     }
+    m_kernelmode = false;
 
     // create MMIO section
     m_mmio.sect.resize(2 * sizeof(uint32_t), 0); // 8 bytes
@@ -102,7 +104,7 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
 
 void executor::run() {
     for (int i = 0; i < NUM_SECTIONS; i++) {
-        printf(".%s @ %08X, length %X\n", section_names[i], m_sections[i].address, m_sections[i].sect.size());
+        printf("%s @ 0x%08X, length %X\n", section_names[i], m_sections[i].address, m_sections[i].sect.size());
     }
 
     printf("\nExecuting bytecode...\n\n===========================================\n");
@@ -159,6 +161,8 @@ void executor::run() {
 
                 m_kernelmode = true; // enter kernelmode
                 m_regs.pc = EXCEPTION_HANDLER;
+
+                
             }
             else {
                 err = e;
@@ -214,6 +218,56 @@ bool executor::dispatch(instruction inst) {
     case uint32_t(instructions::R_FORMAT):
     {
         return dispatch_funct(inst);
+    }
+    break;
+    case uint32_t(instructions::TRAPI):
+    {
+        switch (inst.i.rt) {
+        case uint32_t(imm_trap_instructions::TGEI):
+        {
+            if (int32_t(m_regs.regs[inst.i.rs]) >= bit_cast<int16_t>(inst.i.imm)) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        case uint32_t(imm_trap_instructions::TGEIU):
+        {
+            if (m_regs.regs[inst.i.rs] >= inst.i.imm) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        case uint32_t(imm_trap_instructions::TLTI):
+        {
+            if (int32_t(m_regs.regs[inst.i.rs]) < bit_cast<int16_t>(inst.i.imm)) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        case uint32_t(imm_trap_instructions::TLTIU):
+        {
+            if (m_regs.regs[inst.i.rs] < inst.i.imm) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        case uint32_t(imm_trap_instructions::TEQI):
+        {
+            if (m_regs.regs[inst.i.rs] == inst.i.imm) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        case uint32_t(imm_trap_instructions::TNEI):
+        {
+            if (m_regs.regs[inst.i.rs] != inst.i.imm) {
+                throw mips_exception_trap("Trap exception");
+            }
+        }
+        break;
+        default:
+            throw std::runtime_error("Unkown trap instructions");
+        }
     }
     break;
     //case uint32_t(instructions::ERET): // ERET has same opcode as MFC0
@@ -363,7 +417,14 @@ bool executor::dispatch(instruction inst) {
     break;
     case uint32_t(instructions::ADDI):
     {
-        m_regs.regs[inst.i.rt] = int32_t(m_regs.regs[inst.i.rs]) + bit_cast<int16_t>(inst.i.imm);
+        int32_t a = m_regs.regs[inst.i.rs];
+        int32_t b = bit_cast<int16_t>(inst.i.imm);
+        // check for overflow
+        if ((b > 0 && a > std::numeric_limits<int32_t>::max() - b) || (b < 0 && a < std::numeric_limits<int32_t>::min() - b)) {
+            throw mips_exception_arithmetic_overflow("ADDI operation overflowed");
+        }
+
+        m_regs.regs[inst.i.rt] = a + b;
     }
     break;
     case uint32_t(instructions::ADDIU):
@@ -648,13 +709,54 @@ bool executor::dispatch_funct(instruction inst) {
         m_regs.regs[inst.r.rd] = ~(m_regs.regs[inst.r.rs] | m_regs.regs[inst.r.rt]);
     }
     break;
+    case uint32_t(funct::TGE):
+    {
+        if (int32_t(m_regs.regs[inst.r.rs]) >= int32_t(m_regs.regs[inst.r.rt])) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
+    case uint32_t(funct::TGEU):
+    {
+        if (m_regs.regs[inst.r.rs] >= m_regs.regs[inst.r.rt]) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
+    case uint32_t(funct::TLT):
+    {
+        if (int32_t(m_regs.regs[inst.r.rs]) < int32_t(m_regs.regs[inst.r.rt])) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
+    case uint32_t(funct::TLTU):
+    {
+        if (m_regs.regs[inst.r.rs] < m_regs.regs[inst.r.rt]) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
+    case uint32_t(funct::TEQ):
+    {
+        if (m_regs.regs[inst.r.rs] == m_regs.regs[inst.r.rt]) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
+    case uint32_t(funct::TNE):
+    {
+        if (m_regs.regs[inst.r.rs] != m_regs.regs[inst.r.rt]) {
+            throw mips_exception_trap("Trap exception");
+        }
+    }
+    break;
     default:
         throw std::runtime_error("Invalid funct number");
     }
 
     return true;
 }
-
 
 
 bool executor::dispatch_syscall() {
@@ -784,7 +886,6 @@ bool executor::dispatch_syscall() {
     break;
     default:
         throw mips_exception_syscall("Syscall number " + std::to_string(syscall_num) + " not implemented");
-        //throw std::runtime_error("Syscall number " + std::to_string(syscall_num) + " not implemented");
         
     }
 
