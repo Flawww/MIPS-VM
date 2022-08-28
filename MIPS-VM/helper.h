@@ -1,8 +1,10 @@
 #pragma once
 #include "pch.h"
 
+
+/*
 template<class To, size_t NumBits = 0, class From>
-static To& bit_cast(const From& in) {
+static To bit_cast(const From& in) {
     static_assert(sizeof(To) * 8 >= NumBits && sizeof(From) * 8 >= NumBits, "bit_cast with too many target bits, would cause overflow");
 
     constexpr size_t num_bits = (NumBits > 0) ? NumBits : std::min(sizeof(From), sizeof(To)) * 8;
@@ -17,6 +19,11 @@ static To& bit_cast(const From& in) {
     *((uint8_t*)(&var) + num_bytes) |= *((uint8_t*)(&in) + num_bytes) & mask;
 
     return var;
+}
+*/
+template<class To, class From>
+static To bit_cast(const From& in) {
+    return (To)in;
 }
 
 static bool string_terminates(const char* str, size_t buf_size) {

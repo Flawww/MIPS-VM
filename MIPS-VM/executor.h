@@ -35,6 +35,8 @@ private:
 
 	uint32_t m_tick;
 
+	file_manager m_file_mgr;
+
 	bool m_has_exception_handler;
 	bool m_kernelmode;
 	bool m_can_run;

@@ -9,6 +9,8 @@
 #include <limits>
 #include <thread>
 #include <array>
+#include <cstring>
+#include <exception>
 
 // Platform specific includes used for getch and kbhit
 #ifdef _WIN32

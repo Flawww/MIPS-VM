@@ -28,8 +28,10 @@
 *.opendb
 *.db
 *.ipch
-*.bat
+*.out
+*.exe
 .vs/
+out/
 Debug/
 Release/
 x64/

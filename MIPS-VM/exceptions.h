@@ -6,7 +6,7 @@
 
 constexpr uint32_t EXCEPTION_HANDLER = 0x80000180;
 
-enum EXCEPTION_TYPES : uint32_t {
+enum EXCEPTION_TYPES : int32_t {
 	INVALID_EXCEPTION = -1,
 	INTERRUPT_EXCEPTION = 0,
 	ADDRESS_EXCEPTION_LOAD = 4, 
@@ -22,9 +22,9 @@ enum EXCEPTION_TYPES : uint32_t {
 };
 
 // Base class for all exceptions that can get handled by the kernelmode exception handler
-class mips_exception : public std::exception {
+class mips_exception : public std::runtime_error {
 public:
-	mips_exception(std::string reason): std::exception(reason.c_str()) {}
+	mips_exception(std::string reason): std::runtime_error(reason.c_str()) {}
 
 	virtual uint32_t exception_type() const {
 		return INVALID_EXCEPTION;
@@ -155,7 +155,7 @@ public:
 };
 
 // Shouldn't be handled by kernelmode exception handler.
-class mips_exception_exit : public std::exception {
+class mips_exception_exit : public std::runtime_error {
 public:
-	mips_exception_exit(std::string reason = "EXIT syscall invoked") : std::exception(reason.c_str()) {}
+	mips_exception_exit(std::string reason = "EXIT syscall invoked") : std::runtime_error((char const* const)reason.c_str()) {}
 };

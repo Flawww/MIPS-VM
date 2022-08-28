@@ -33,6 +33,12 @@
     <ClCompile Include="linux_conio.cpp">
       <Filter>vm</Filter>
     </ClCompile>
+    <ClCompile Include="dispatcher.cpp">
+      <Filter>vm</Filter>
+    </ClCompile>
+    <ClCompile Include="file_io.cpp">
+      <Filter>vm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -60,6 +66,9 @@
       <Filter>vm</Filter>
     </ClInclude>
     <ClInclude Include="exceptions.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="file_io.h">
       <Filter>vm</Filter>
     </ClInclude>
   </ItemGroup>
