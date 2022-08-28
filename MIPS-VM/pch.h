@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <algorithm>
 #include <limits>
@@ -11,6 +12,8 @@
 #include <array>
 #include <cstring>
 #include <exception>
+#include <bitset>
+#include <random>
 
 // Platform specific includes used for getch and kbhit
 #ifdef _WIN32

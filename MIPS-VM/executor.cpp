@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "executor.h"
 #include "helper.h"
-#include "file_io.h"
+#include "file_mgr.h"
 
 executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(false), m_has_exception_handler(false) {
     // load all existing sections

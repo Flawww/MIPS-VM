@@ -4,6 +4,8 @@
 #include "instruction.h"
 #include "memory.h"
 #include "exceptions.h"
+#include "file_mgr.h"
+#include "random_mgr.h"
 
 class executor {
 public:
@@ -35,6 +37,7 @@ private:
 
 	uint32_t m_tick;
 
+	random_mgr m_random_mgr;
 	file_manager m_file_mgr;
 
 	bool m_has_exception_handler;

@@ -120,7 +120,16 @@ enum class syscalls : int {
 	WRITE_FILE = 15,
 	CLOSE_FILE = 16,
 	EXIT2 = 17,
+	TIME,
 	SLEEP = 32,
+	PRINT_HEX = 34,
+	PRINT_BINARY = 35,
+	PRINT_UNSIGNED = 36,
+	SET_SEED = 40,
+	RAND_INT = 41,
+	RAND_INT_RANGE = 42,
+	RAND_FLOAT = 43,
+	RAND_DBL = 44,
 };
 
 // Stored in the "rt" bits for I-format trap instructions

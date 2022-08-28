@@ -36,7 +36,7 @@
     <ClCompile Include="dispatcher.cpp">
       <Filter>vm</Filter>
     </ClCompile>
-    <ClCompile Include="file_io.cpp">
+    <ClCompile Include="file_mgr.cpp">
       <Filter>vm</Filter>
     </ClCompile>
   </ItemGroup>
@@ -68,7 +68,10 @@
     <ClInclude Include="exceptions.h">
       <Filter>vm</Filter>
     </ClInclude>
-    <ClInclude Include="file_io.h">
+    <ClInclude Include="file_mgr.h">
+      <Filter>vm</Filter>
+    </ClInclude>
+    <ClInclude Include="random_mgr.h">
       <Filter>vm</Filter>
     </ClInclude>
   </ItemGroup>

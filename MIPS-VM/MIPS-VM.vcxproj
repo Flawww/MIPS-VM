@@ -146,7 +146,7 @@
     <ClCompile Include="dispatcher.cpp" />
     <ClCompile Include="entry.cpp" />
     <ClCompile Include="executor.cpp" />
-    <ClCompile Include="file_io.cpp" />
+    <ClCompile Include="file_mgr.cpp" />
     <ClCompile Include="linux_conio.cpp" />
     <ClCompile Include="memory.cpp" />
     <ClCompile Include="pch.cpp">
@@ -157,12 +157,13 @@
   <ItemGroup>
     <ClInclude Include="exceptions.h" />
     <ClInclude Include="executor.h" />
-    <ClInclude Include="file_io.h" />
+    <ClInclude Include="file_mgr.h" />
     <ClInclude Include="helper.h" />
     <ClInclude Include="instruction.h" />
     <ClInclude Include="linux_conio.h" />
     <ClInclude Include="memory.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="random_mgr.h" />
     <ClInclude Include="registers.h" />
     <ClInclude Include="sections.h" />
   </ItemGroup>

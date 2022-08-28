@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "executor.h"
 #include "helper.h"
-#include "file_io.h"
+#include "file_mgr.h"
 
 bool executor::dispatch(instruction inst) {
     // get the opcode (opcode is always the first 6 bits, so what format we get the opcode as does not matter)
@@ -715,9 +715,59 @@ bool executor::dispatch_syscall() {
         throw mips_exception_exit("EXIT syscall invoked, terminating with value " + std::to_string(a0));
     }
     break;
+    case uint32_t(syscalls::TIME):
+    {
+        // get time since epoch
+        uint64_t timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        m_regs.regs[int(register_names::a0)] = (uint32_t)(timestamp & 0xFFFFFFFF);
+        m_regs.regs[int(register_names::a1)] = (uint32_t)((timestamp >> 32) & 0xFFFFFFFF);
+    }
+    break;
     case uint32_t(syscalls::SLEEP):
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(a0));
+    }
+    break;
+    case uint32_t(syscalls::PRINT_HEX):
+    {
+        printf("%X", a0);
+    }
+    break;
+    case uint32_t(syscalls::PRINT_BINARY):
+    {
+        std::stringstream ss;
+        ss << std::bitset<32>(a0);
+        printf("%s", ss.str().c_str());
+    }
+    break;
+    case uint32_t(syscalls::PRINT_UNSIGNED):
+    {
+        printf("%u", a0);
+    }
+    break;
+    case uint32_t(syscalls::SET_SEED):
+    {
+        m_random_mgr.set_seed(a0, a1);
+    }
+    break;
+    case uint32_t(syscalls::RAND_INT):
+    {
+        m_regs.regs[int(register_names::a0)] = m_random_mgr.get_int(a0);
+    }
+    break;
+    case uint32_t(syscalls::RAND_INT_RANGE):
+    {
+        m_regs.regs[int(register_names::a0)] = m_random_mgr.get_int_range(a0, a1);
+    }
+    break;
+    case uint32_t(syscalls::RAND_FLOAT):
+    {
+        m_regs.f[0] = m_random_mgr.get_float(a0);
+    }
+    break;
+    case uint32_t(syscalls::RAND_DBL):
+    {
+        m_regs.f[0] = m_random_mgr.get_float(a0);
     }
     break;
     default:
