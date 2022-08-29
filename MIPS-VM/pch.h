@@ -14,6 +14,7 @@
 #include <exception>
 #include <bitset>
 #include <random>
+#include <stack>
 
 // Platform specific includes used for getch and kbhit
 #ifdef _WIN32

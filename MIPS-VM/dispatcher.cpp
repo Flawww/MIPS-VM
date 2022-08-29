@@ -64,9 +64,17 @@ bool executor::dispatch(instruction inst) {
     //case uint32_t(instructions::ERET): // ERET has same opcode as MFC0
     case uint32_t(instructions::MFC0):
     {
-        if (inst.r.funct == 0x18) { // ERET (funct 0x18)
-            m_regs.pc = m_regs.epc; // go back to usermode
-            m_kernelmode = false;
+        // ERET (funct 0x18)
+        if (inst.r.funct == 0x18) { 
+            if (!m_kernelmode) {
+                throw std::runtime_error("Unexpected ERET instruction in usermode");
+            }
+
+            m_regs.pc = m_regs.epc; // go back to epc (caller)
+            // try to pop kernel frame in case we are in a nested call to a custom syscall
+            if (!m_syscall_mgr.pop_syscall_frame(m_regs)) {
+                m_kernelmode = false; // Nothing to pop, we are not nested. Go back to usermode.
+            }         
             return false;
         }
 
@@ -785,11 +793,17 @@ bool executor::dispatch_syscall() {
     break;
     default:
     {
+        // If a custom syscall is registered to this number, use it, otherwise throw exception.
         uint32_t custom_syscall = m_syscall_mgr.get_syscall_addr(syscall_num);
         if (custom_syscall) {
-            m_regs.status = (1 << 1); // bit 1 is set
-            m_regs.cause = SYSCALL_EXCEPTION << 2; // bits 2-6 of cause is exception type. bit 8 is pending interrupt. Shift left by 2 to make it the correct bits.
-            m_regs.epc = m_regs.pc; // save pc of instruction which caused exception
+            // If we are already in kernelmode save the frame so we can revert back to it when returning from the syscall
+            if (m_kernelmode) {
+                m_syscall_mgr.push_syscall_frame(m_regs);
+            }
+
+            m_regs.status = (1 << 1);
+            m_regs.cause = SYSCALL_EXCEPTION << 2; // syscall exception
+            m_regs.epc = m_regs.pc + 0x4; // save pc instruction after the one who performed the syscall
 
             m_kernelmode = true; // enter kernelmode
             m_regs.pc = custom_syscall;
