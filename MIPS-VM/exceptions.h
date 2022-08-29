@@ -1,7 +1,6 @@
 #pragma once
 #include "pch.h"
 
-
 // MIPS exceptions, traps, interrupts 
 
 constexpr uint32_t EXCEPTION_HANDLER = 0x80000180;

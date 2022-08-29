@@ -155,6 +155,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="custom_syscall_mgr.h" />
     <ClInclude Include="exceptions.h" />
     <ClInclude Include="executor.h" />
     <ClInclude Include="file_mgr.h" />

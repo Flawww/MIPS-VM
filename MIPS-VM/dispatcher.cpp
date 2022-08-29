@@ -770,9 +770,33 @@ bool executor::dispatch_syscall() {
         m_regs.f[0] = m_random_mgr.get_float(a0);
     }
     break;
-    default:
-        throw mips_exception_syscall("Syscall number " + std::to_string(syscall_num) + " not implemented");
+    case uint32_t(syscalls::REGISTER_SYSCALL):
+    {
+        if (a0 < 50) { // first 50 syscalls are reserved
+            throw mips_exception_syscall("Syscalls 1-49 are reserved, can't register new syscall with number " + std::to_string(a0));
+        }
+        section* sect = nullptr;
+        if (!(sect = get_section_for_address(a1, true)) || !(sect->flags & EXECUTABLE) || !(sect->flags & KERNEL)) {
+            throw mips_exception_store("Invalid address for custom syscall handler", a1);
+        }
 
+        m_syscall_mgr.register_syscall(a0, a1);
+    }
+    break;
+    default:
+    {
+        uint32_t custom_syscall = m_syscall_mgr.get_syscall_addr(syscall_num);
+        if (custom_syscall) {
+            m_regs.status = (1 << 1); // bit 1 is set
+            m_regs.cause = SYSCALL_EXCEPTION << 2; // bits 2-6 of cause is exception type. bit 8 is pending interrupt. Shift left by 2 to make it the correct bits.
+            m_regs.epc = m_regs.pc; // save pc of instruction which caused exception
+
+            m_kernelmode = true; // enter kernelmode
+            m_regs.pc = custom_syscall;
+            return false;
+        }
+        throw mips_exception_syscall("Syscall number " + std::to_string(syscall_num) + " not implemented");
+    }
     }
 
     return true;

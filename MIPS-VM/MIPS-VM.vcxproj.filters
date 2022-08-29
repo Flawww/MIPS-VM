@@ -74,5 +74,8 @@
     <ClInclude Include="random_mgr.h">
       <Filter>vm</Filter>
     </ClInclude>
+    <ClInclude Include="custom_syscall_mgr.h">
+      <Filter>vm</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

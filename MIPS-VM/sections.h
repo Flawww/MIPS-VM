@@ -4,6 +4,7 @@
 enum SECTION_FLAGS : int {
 	EXECUTABLE = (1 << 0),
 	MUTABLE = (1 << 1),
+	KERNEL = (1 << 2),
 };
 
 enum SECTIONS : int {
@@ -20,8 +21,8 @@ constexpr const char* section_names[] = {
 };
 
 constexpr int section_protection[] = {
-	// .text	.data	  .ktext	 .kdata
-	EXECUTABLE, MUTABLE, EXECUTABLE, MUTABLE
+	// .text	.data			.ktext			  .kdata
+	EXECUTABLE, MUTABLE, EXECUTABLE | KERNEL, MUTABLE | KERNEL
 };
 
 struct section {

@@ -130,6 +130,7 @@ enum class syscalls : int {
 	RAND_INT_RANGE = 42,
 	RAND_FLOAT = 43,
 	RAND_DBL = 44,
+	REGISTER_SYSCALL = 49,
 };
 
 // Stored in the "rt" bits for I-format trap instructions

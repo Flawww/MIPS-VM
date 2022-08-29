@@ -34,12 +34,10 @@ executor::executor(std::string file): m_can_run(false), m_tick(0), m_kernelmode(
     }
 
     // check if exception handler exists
-    m_kernelmode = true; // need to set the kernelmode flag to true to be able to get the kernelmode section
-    section* ktext = get_section_for_address(EXCEPTION_HANDLER);
+    section* ktext = get_section_for_address(EXCEPTION_HANDLER, true);
     if (ktext && ktext->address == m_sections[KTEXT].address) {
         m_has_exception_handler = true; // address 0x80000180 (exception handler) is valid and in .ktext, exception handler exists.
     }
-    m_kernelmode = false;
 
     // create MMIO section
     m_mmio.sect.resize(2 * sizeof(uint32_t), 0); // 8 bytes
@@ -56,7 +54,7 @@ uint32_t executor::get_offset_for_section(section* sect, uint32_t addr) {
     return addr - sect->address;
 }
 
-section* executor::get_section_for_address(uint32_t addr) {
+section* executor::get_section_for_address(uint32_t addr, bool kernelmode_override) {
     if (addr == 0) {
         return nullptr;
     }
@@ -64,7 +62,7 @@ section* executor::get_section_for_address(uint32_t addr) {
     // check if its in a section from the "executable" (text, data, ktext or kdata)
     for (int i = 0; i < NUM_SECTIONS; i++) {
         // skip kernelmode address space if we are not in kernelmode
-        if ((i == KTEXT || i == KDATA) && !m_kernelmode) {
+        if ((i == KTEXT || i == KDATA) && (!m_kernelmode && !kernelmode_override)) {
             continue;
         }
         if (addr >= m_sections[i].address && addr < m_sections[i].address + m_sections[i].sect.size()) {
@@ -109,7 +107,7 @@ void executor::run() {
 
     std::string exit_reason;
     instruction inst(0x0);
-
+    
     while (true) {
         bool error_state = false;
         std::exception err;
@@ -159,8 +157,6 @@ void executor::run() {
 
                 m_kernelmode = true; // enter kernelmode
                 m_regs.pc = EXCEPTION_HANDLER;
-
-                
             }
             else {
                 err = e;

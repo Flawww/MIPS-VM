@@ -6,6 +6,7 @@
 #include "exceptions.h"
 #include "file_mgr.h"
 #include "random_mgr.h"
+#include "custom_syscall_mgr.h"
 
 class executor {
 public:
@@ -23,7 +24,7 @@ private:
 	void keyboard_interrupt();
 
 	uint32_t get_offset_for_section(section* sect, uint32_t addr);
-	section* get_section_for_address(uint32_t addr);
+	section* get_section_for_address(uint32_t addr, bool kernelmode_override = false);
 	bool is_safe_access(section* sect, uint32_t addr, uint32_t size);
 
 	registers m_regs;
@@ -37,6 +38,7 @@ private:
 
 	uint32_t m_tick;
 
+	custom_syscall_mgr m_syscall_mgr;
 	random_mgr m_random_mgr;
 	file_manager m_file_mgr;
 
