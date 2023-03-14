@@ -94,7 +94,7 @@ bool executor::is_safe_access(section* sect, uint32_t addr, uint32_t size) {
         addr + size < sect_start || addr + size > sect_end) {
         return false;
     }
-    //printf("true\n");
+
     return true;
 }
 
@@ -107,7 +107,7 @@ void executor::run() {
 
     std::string exit_reason;
     instruction inst(0x0);
-    
+
     while (true) {
         bool error_state = false;
         std::exception err;

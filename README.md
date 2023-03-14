@@ -6,6 +6,9 @@ After starting the VM, enter the name of the MIPS program to run. The MIPS progr
 
 To easily generate these binary files from MIPS assembly, please refer to [QtSpim to binary](https://github.com/Flawww/spim_to_binary)
 
+# Extended Functionality
+* Registering new MIPS syscalls with new syscall "RegisterUserSyscall (49)"
+
 # Compilation
 Requires a compiler that supports C++17 or newer.
 ## Windows

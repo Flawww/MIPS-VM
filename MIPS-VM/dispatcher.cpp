@@ -71,6 +71,7 @@ bool executor::dispatch(instruction inst) {
             }
 
             m_regs.pc = m_regs.epc; // go back to epc (caller)
+
             // try to pop kernel frame in case we are in a nested call to a custom syscall
             if (!m_syscall_mgr.pop_syscall_frame(m_regs)) {
                 m_kernelmode = false; // Nothing to pop, we are not nested. Go back to usermode.
